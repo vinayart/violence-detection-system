@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Violence Detection System</title>
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #070707;
+    color: white;
+    text-align: center;
+    padding: 10px;
+    margin: 0;
+  }
+  #video_feed {
+    border: 5px solid #555;
+    width: 320px;
+    height: 240px;
+    object-fit: contain;
+    background: black;
+  }
+  #status {
+    margin-top: 10px;
+    font-size: 1.3em;
+    padding: 12px;
+    border-radius: 6px;
+    width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .violent {
+    background-color: #b22222;
+  }
+  .non-violent {
+    background-color: #228B22;
+  }
+  button {
+    margin: 10px 8px;
+    padding: 12px 24px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 6px;
+    border: none;
+    transition: background-color 0.3s ease;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  #start_live {
+    background-color: #228B22;
+    color: white;
+  }
+  #stop {
+    background-color: #b22222;
+    color: white;
+  }
+  #upload_video {
+    background-color: #444;
+    color: white;
+  }
+  #log {
+    max-height: 200px;
+    overflow-y: auto;
+    margin: 20px auto;
+    width: 640px;
+    background: #111;
+    border: 1px solid #333;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 14px;
+    text-align: left;
+    border-radius: 6px;
+  }
+  #location, #authority {
+    margin-top: 8px;
+    font-size: 1em;
+  }
+</style>
+</head>
+<body>
+
+<h1>Violence Detection System</h1>
+
+<img id="video_feed" src="" alt="Video feed" />
+<div id="status" class="non-violent">Status: Waiting for video...</div>
+<div id="location"></div>
+<div id="authority"></div>
+
+<div>
+  <button id="start_live">Start Live Detection</button>
+  <button id="stop" disabled>Stop Detection</button>
+</div>
+
+<div>
+  <input type="file" id="video_file" accept="video/*" />
+  <button id="upload_video">Upload Video & Detect</button>
+</div>
+
+<div id="log"></div>
+
+<script>
+  const socket = io();
+
+  const videoFeed = document.getElementById("video_feed");
+  const status = document.getElementById("status");
+  const locationDiv = document.getElementById("location");
+  const authorityDiv = document.getElementById("authority");
+  const log = document.getElementById("log");
+
+  const startLiveBtn = document.getElementById("start_live");
+  const stopBtn = document.getElementById("stop");
+  const uploadVideoBtn = document.getElementById("upload_video");
+  const videoFileInput = document.getElementById("video_file");
+
+  function logMessage(msg) {
+    const p = document.createElement("p");
+    p.textContent = msg;
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  socket.on("live_feed", data => {
+    videoFeed.src = "data:image/jpeg;base64," + data.frame;
+    if (data.is_violent) {
+      status.textContent = "Status: Violence Detected!";
+      status.className = "violent";
+      logMessage(`[${new Date().toLocaleTimeString()}] Violence detected! Location: ${data.location}, Authority: ${data.authority}`);
+    } else {
+      status.textContent = "Status: No Violence Detected";
+      status.className = "non-violent";
+    }
+    locationDiv.textContent = `Location: ${data.location}`;
+    authorityDiv.textContent = `Nearest Authority: ${data.authority}`;
+  });
+
+  socket.on("chunk_status", data => {
+    logMessage(`[${new Date().toLocaleTimeString()}] Chunk ${data.chunk}: ${data.status}`);
+  });
+
+  startLiveBtn.addEventListener("click", async () => {
+    startLiveBtn.disabled = true;
+    uploadVideoBtn.disabled = true;
+    stopBtn.disabled = false;
+
+    try {
+      const res = await fetch("/start_live_detection", { method: "POST" });
+      const data = await res.json();
+      logMessage(data.status);
+      status.textContent = "Status: Live detection started";
+      status.className = "non-violent";
+    } catch (error) {
+      logMessage("Error starting live detection.");
+      startLiveBtn.disabled = false;
+      uploadVideoBtn.disabled = false;
+      stopBtn.disabled = true;
+    }
+  });
+
+  stopBtn.addEventListener("click", async () => {
+    stopBtn.disabled = true;
+
+    try {
+      const res = await fetch("/stop_detection", { method: "POST" });
+      const data = await res.json();
+      logMessage(data.status);
+
+      status.textContent = "Status: Detection stopped";
+      status.className = "";
+      videoFeed.src = "";
+      locationDiv.textContent = "";
+      authorityDiv.textContent = "";
+
+      startLiveBtn.disabled = false;
+      uploadVideoBtn.disabled = false;
+    } catch (error) {
+      logMessage("Error stopping detection.");
+      stopBtn.disabled = false;
+    }
+  });
+
+  uploadVideoBtn.addEventListener("click", async () => {
+    if (videoFileInput.files.length === 0) {
+      alert("Please select a video file.");
+      return;
+    }
+
+    startLiveBtn.disabled = true;
+    uploadVideoBtn.disabled = true;
+    stopBtn.disabled = false;
+
+    const file = videoFileInput.files[0];
+    const formData = new FormData();
+    formData.append("video", file);
+
+    try {
+      const res = await fetch("/start_video_detection", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      logMessage(data.status);
+      status.textContent = "Status: Video detection started";
+      status.className = "non-violent";
+    } catch (error) {
+      logMessage("Error uploading video for detection.");
+      startLiveBtn.disabled = false;
+      uploadVideoBtn.disabled = false;
+      stopBtn.disabled = true;
+    }
+  });
+</script>
+
+</body>
+</html>

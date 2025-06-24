@@ -1,0 +1,12 @@
+
+flask
+flask-socketio
+eventlet
+torch
+transformers
+ultralytics
+opencv-python
+pygame
+python-docx
+Pillow
+requests
